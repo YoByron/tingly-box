@@ -34,9 +34,11 @@ func init() {
 	rootCmd.AddCommand(cli.DeleteCommand(appConfig))
 	rootCmd.AddCommand(cli.StartCommand(appConfig))
 	rootCmd.AddCommand(cli.StopCommand(appConfig))
+	rootCmd.AddCommand(cli.RestartCommand(appConfig))
 	rootCmd.AddCommand(cli.StatusCommand(appConfig))
 	rootCmd.AddCommand(cli.TokenCommand(appConfig))
 	rootCmd.AddCommand(cli.ExampleCommand(appConfig))
+	rootCmd.AddCommand(cli.InteractiveCommand(appConfig))
 }
 
 func main() {
