@@ -19,6 +19,7 @@ type WebUI struct {
 	router  *gin.Engine
 	config  *config.AppConfig
 	logger  *memory.MemoryLogger
+	assets  *EmbeddedAssets
 }
 
 // NewWebUI creates a new web UI manager
@@ -27,12 +28,20 @@ func NewWebUI(enabled bool, appConfig *config.AppConfig, logger *memory.MemoryLo
 		return &WebUI{enabled: false}
 	}
 
+	// Initialize embedded assets
+	assets, err := NewEmbeddedAssets()
+	if err != nil {
+		log.Printf("Failed to initialize embedded assets: %v", err)
+		// Continue without embedded assets, will fallback to file system
+	}
+
 	gin.SetMode(gin.ReleaseMode)
 	wui := &WebUI{
 		enabled: true,
 		config:  appConfig,
 		logger:  logger,
 		router:  gin.New(),
+		assets:  assets,
 	}
 
 	wui.setupRoutes()
@@ -55,18 +64,22 @@ func (wui *WebUI) setupRoutes() {
 		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
 	})
 
-	// Static files and templates - use absolute paths
-	templatePath := getTemplatePath()
-	staticPath := getStaticPath()
+	// Static files and templates - try embedded assets first, fallback to filesystem
+	if wui.assets != nil {
+		log.Printf("Using embedded assets")
+		wui.assets.SetupStaticRoutes(wui.router)
+	} else {
+		// Fallback to filesystem
+		templatePath := getTemplatePath()
+		staticPath := getStaticPath()
 
-	// Log the paths for debugging
-	log.Printf("Loading templates from: %s", templatePath)
-	log.Printf("Loading static files from: %s", staticPath)
+		log.Printf("Loading templates from filesystem: %s", templatePath)
+		log.Printf("Loading static files from filesystem: %s", staticPath)
 
-	// Load templates
-	wui.router.LoadHTMLGlob(templatePath)
-	log.Printf("Templates loaded successfully")
-	wui.router.Static("/static", staticPath)
+		// Load templates from filesystem
+		wui.router.LoadHTMLGlob(templatePath)
+		wui.router.Static("/static", staticPath)
+	}
 
 	// Dashboard endpoints
 	wui.router.GET("/", wui.Dashboard)
@@ -133,19 +146,25 @@ func (wui *WebUI) SetupRoutesOnServer(mainRouter *gin.Engine) {
 		return
 	}
 
-	// Load templates on the main router
-	templatePath := getTemplatePath()
-	staticPath := getStaticPath()
+	// Load templates and static files on the main router - try embedded first
+	if wui.assets != nil {
+		log.Printf("Using embedded assets on main server")
+		wui.assets.SetupStaticRoutes(mainRouter)
+	} else {
+		// Fallback to filesystem
+		templatePath := getTemplatePath()
+		staticPath := getStaticPath()
 
-	log.Printf("Loading templates on main server from: %s", templatePath)
-	log.Printf("Loading static files on main server from: %s", staticPath)
+		log.Printf("Loading templates on main server from filesystem: %s", templatePath)
+		log.Printf("Loading static files on main server from filesystem: %s", staticPath)
 
-	// Load templates on main router
-	mainRouter.LoadHTMLGlob(templatePath)
-	log.Printf("Templates loaded successfully on main server")
+		// Load templates on main router
+		mainRouter.LoadHTMLGlob(templatePath)
+		log.Printf("Templates loaded successfully on main server")
 
-	// Load static files on main router
-	mainRouter.Static("/static", staticPath)
+		// Load static files on main router
+		mainRouter.Static("/static", staticPath)
+	}
 
 	// Add dashboard routes to main router
 	mainRouter.GET("/", wui.Dashboard)
@@ -196,27 +215,51 @@ func (wui *WebUI) IsEnabled() bool {
 
 // Page Handlers (exported for server integration)
 func (wui *WebUI) Dashboard(c *gin.Context) {
-	c.HTML(http.StatusOK, "dashboard.html", gin.H{
-		"title": "Tingly Box Dashboard",
-	})
+	if wui.assets != nil {
+		wui.assets.HTML(c, "dashboard.html", gin.H{
+			"title": "Tingly Box Dashboard",
+		})
+	} else {
+		c.HTML(http.StatusOK, "dashboard.html", gin.H{
+			"title": "Tingly Box Dashboard",
+		})
+	}
 }
 
 func (wui *WebUI) ProvidersPage(c *gin.Context) {
-	c.HTML(http.StatusOK, "providers.html", gin.H{
-		"title": "Providers - Tingly Box",
-	})
+	if wui.assets != nil {
+		wui.assets.HTML(c, "providers.html", gin.H{
+			"title": "Providers - Tingly Box",
+		})
+	} else {
+		c.HTML(http.StatusOK, "providers.html", gin.H{
+			"title": "Providers - Tingly Box",
+		})
+	}
 }
 
 func (wui *WebUI) ServerPage(c *gin.Context) {
-	c.HTML(http.StatusOK, "server.html", gin.H{
-		"title": "Server - Tingly Box",
-	})
+	if wui.assets != nil {
+		wui.assets.HTML(c, "server.html", gin.H{
+			"title": "Server - Tingly Box",
+		})
+	} else {
+		c.HTML(http.StatusOK, "server.html", gin.H{
+			"title": "Server - Tingly Box",
+		})
+	}
 }
 
 func (wui *WebUI) HistoryPage(c *gin.Context) {
-	c.HTML(http.StatusOK, "history.html", gin.H{
-		"title": "History - Tingly Box",
-	})
+	if wui.assets != nil {
+		wui.assets.HTML(c, "history.html", gin.H{
+			"title": "History - Tingly Box",
+		})
+	} else {
+		c.HTML(http.StatusOK, "history.html", gin.H{
+			"title": "History - Tingly Box",
+		})
+	}
 }
 
 // API Handlers (exported for server integration)
