@@ -15,6 +15,7 @@ function App() {
                 <Layout>
                     <Routes>
                         <Route path="/" element={<Dashboard />} />
+                        <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/providers" element={<Providers />} />
                         <Route path="/server" element={<Server />} />
                         {/* <Route path="/history" element={<History />} /> */}
