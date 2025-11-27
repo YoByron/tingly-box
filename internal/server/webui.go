@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -94,16 +92,7 @@ func (wui *WebUI) setupRoutes() {
 		log.Printf("Using embedded assets")
 		wui.assets.SetupStaticRoutes(wui.router)
 	} else {
-		// Fallback to filesystem
-		templatePath := getTemplatePath()
-		staticPath := getStaticPath()
-
-		log.Printf("Loading templates from filesystem: %s", templatePath)
-		log.Printf("Loading static files from filesystem: %s", staticPath)
-
-		// Load templates from filesystem
-		wui.router.LoadHTMLGlob(templatePath)
-		wui.router.Static("/static", staticPath)
+		panic("No UI resources")
 	}
 
 	// Dashboard endpoints
@@ -179,19 +168,7 @@ func (wui *WebUI) SetupRoutesOnServer(mainRouter *gin.Engine) {
 		log.Printf("Using embedded assets on main server")
 		wui.assets.SetupStaticRoutes(mainRouter)
 	} else {
-		// Fallback to filesystem
-		templatePath := getTemplatePath()
-		staticPath := getStaticPath()
-
-		log.Printf("Loading templates on main server from filesystem: %s", templatePath)
-		log.Printf("Loading static files on main server from filesystem: %s", staticPath)
-
-		// Load templates on main router
-		mainRouter.LoadHTMLGlob(templatePath)
-		log.Printf("Templates loaded successfully on main server")
-
-		// Load static files on main router
-		mainRouter.Static("/static", staticPath)
+		panic("No UI resources")
 	}
 
 	// Add dashboard routes to main router
@@ -199,14 +176,14 @@ func (wui *WebUI) SetupRoutesOnServer(mainRouter *gin.Engine) {
 	mainRouter.GET("/dashboard", wui.Dashboard)
 
 	// UI page routes on main router
-	ui := mainRouter.Group("/ui")
-	{
-		ui.GET("/", wui.Dashboard)
-		ui.GET("/dashboard", wui.Dashboard)
-		ui.GET("/providers", wui.ProvidersPage)
-		ui.GET("/server", wui.ServerPage)
-		ui.GET("/history", wui.HistoryPage)
-	}
+	// ui := mainRouter.Group("/")
+	// {
+	// 	ui.GET("/", wui.Dashboard)
+	// 	ui.GET("/dashboard", wui.Dashboard)
+	// 	ui.GET("/providers", wui.ProvidersPage)
+	// 	ui.GET("/server", wui.ServerPage)
+	// 	ui.GET("/history", wui.HistoryPage)
+	// }
 
 	// Add API routes for web UI functionality on main router
 	api := mainRouter.Group("/api")
@@ -247,49 +224,34 @@ func (wui *WebUI) IsEnabled() bool {
 // Page Handlers (exported for server integration)
 func (wui *WebUI) Dashboard(c *gin.Context) {
 	if wui.assets != nil {
-		wui.assets.HTML(c, "dashboard.html", gin.H{
-			"title": "Tingly Box Dashboard",
-		})
+		wui.assets.HTML(c, "index.html", nil)
 	} else {
-		c.HTML(http.StatusOK, "dashboard.html", gin.H{
-			"title": "Tingly Box Dashboard",
-		})
+		panic("No UI resources")
+
 	}
 }
 
 func (wui *WebUI) ProvidersPage(c *gin.Context) {
 	if wui.assets != nil {
-		wui.assets.HTML(c, "providers.html", gin.H{
-			"title": "Providers - Tingly Box",
-		})
+		wui.assets.HTML(c, "index.html", nil)
 	} else {
-		c.HTML(http.StatusOK, "providers.html", gin.H{
-			"title": "Providers - Tingly Box",
-		})
+		panic("No UI resources")
 	}
 }
 
 func (wui *WebUI) ServerPage(c *gin.Context) {
 	if wui.assets != nil {
-		wui.assets.HTML(c, "server.html", gin.H{
-			"title": "Server - Tingly Box",
-		})
+		wui.assets.HTML(c, "index.html", nil)
 	} else {
-		c.HTML(http.StatusOK, "server.html", gin.H{
-			"title": "Server - Tingly Box",
-		})
+		panic("No UI resources")
 	}
 }
 
 func (wui *WebUI) HistoryPage(c *gin.Context) {
 	if wui.assets != nil {
-		wui.assets.HTML(c, "history.html", gin.H{
-			"title": "History - Tingly Box",
-		})
+		wui.assets.HTML(c, "index.html", nil)
 	} else {
-		c.HTML(http.StatusOK, "history.html", gin.H{
-			"title": "History - Tingly Box",
-		})
+		panic("No UI resources")
 	}
 }
 
@@ -386,10 +348,10 @@ func (wui *WebUI) GetDefaults(c *gin.Context) {
 // AddProvider adds a new provider
 func (wui *WebUI) AddProvider(c *gin.Context) {
 	var req struct {
-		Name     string `json:"name" binding:"required"`
-		APIBase  string `json:"api_base" binding:"required"`
-		Token    string `json:"token" binding:"required"`
-		Enabled  bool   `json:"enabled"`
+		Name    string `json:"name" binding:"required"`
+		APIBase string `json:"api_base" binding:"required"`
+		Token   string `json:"token" binding:"required"`
+		Enabled bool   `json:"enabled"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -492,10 +454,10 @@ func (wui *WebUI) UpdateProvider(c *gin.Context) {
 	}
 
 	var req struct {
-		NewName  *string `json:"name,omitempty"`
-		APIBase  *string `json:"api_base,omitempty"`
-		Token    *string `json:"token,omitempty"`
-		Enabled  *bool   `json:"enabled,omitempty"`
+		NewName *string `json:"name,omitempty"`
+		APIBase *string `json:"api_base,omitempty"`
+		Token   *string `json:"token,omitempty"`
+		Enabled *bool   `json:"enabled,omitempty"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -535,8 +497,8 @@ func (wui *WebUI) UpdateProvider(c *gin.Context) {
 	if err != nil {
 		if wui.logger != nil {
 			wui.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
-				"name":     providerName,
-				"updates":  req,
+				"name":    providerName,
+				"updates": req,
 			}, false, err.Error())
 		}
 
@@ -912,29 +874,6 @@ func (wui *WebUI) GetProviderModels(c *gin.Context) {
 		"success": true,
 		"data":    providerModels,
 	})
-}
-
-// Helper functions to get template and static file paths
-func getTemplatePath() string {
-	if wd, err := os.Getwd(); err == nil {
-		templatePath := filepath.Join(wd, "web", "templates", "*")
-		if _, err := os.Stat(templatePath); err == nil {
-			return templatePath
-		}
-	}
-	// Fallback to relative path
-	return "web/templates/*"
-}
-
-func getStaticPath() string {
-	if wd, err := os.Getwd(); err == nil {
-		staticPath := filepath.Join(wd, "web", "static")
-		if _, err := os.Stat(staticPath); err == nil {
-			return staticPath
-		}
-	}
-	// Fallback to relative path
-	return "./web/static"
 }
 
 // GetShutdownChannel returns the shutdown channel for the main process to listen on
