@@ -322,14 +322,25 @@ func (wui *WebUI) GetDefaults(c *gin.Context) {
 		return
 	}
 
-	defaultProvider, defaultModel, requestModel, responseModel := globalConfig.GetDefaults()
+	requestConfigs := globalConfig.GetRequestConfigs()
+	defaultRequestID := globalConfig.GetDefaultRequestID()
+
+	// Convert RequestConfigs to response format
+	responseConfigs := make([]map[string]interface{}, len(requestConfigs))
+	for i, rc := range requestConfigs {
+		responseConfigs[i] = map[string]interface{}{
+			"request_model":  rc.RequestModel,
+			"response_model": rc.ResponseModel,
+			"provider":       rc.Provider,
+			"default_model":  rc.DefaultModel,
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"defaultProvider": defaultProvider,
-			"defaultModel":    defaultModel,
-			"requestModel":    requestModel,
-			"responseModel":   responseModel,
+			"request_configs":    responseConfigs,
+			"default_request_id": defaultRequestID,
 		},
 	})
 }
@@ -711,11 +722,12 @@ func (wui *WebUI) GenerateToken(c *gin.Context) {
 
 func (wui *WebUI) SetDefaults(c *gin.Context) {
 	var req struct {
-		DefaultProvider string `json:"defaultProvider"`
-		DefaultModel    string `json:"defaultModel"`
-		RequestModel    string `json:"requestModel"`
-		ResponseModel   string `json:"responseModel"`
+		RequestConfigs []config.RequestConfig `json:"request_configs"`
 	}
+
+	// Body
+	//bodyBytes, _ := c.GetRawData()
+	//println(string(bodyBytes))
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -734,59 +746,32 @@ func (wui *WebUI) SetDefaults(c *gin.Context) {
 		return
 	}
 
-	// Update defaults
-	if req.DefaultProvider != "" {
-		if err := globalConfig.SetDefaultProvider(req.DefaultProvider); err != nil {
+	// Update RequestConfigs if provided
+	if req.RequestConfigs != nil {
+		if err := globalConfig.SetRequestConfigs(req.RequestConfigs); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
-				"error":   err.Error(),
-			})
-			return
-		}
-	}
-
-	if req.DefaultModel != "" {
-		if err := globalConfig.SetDefaultModel(req.DefaultModel); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   err.Error(),
-			})
-			return
-		}
-	}
-
-	if req.RequestModel != "" {
-		if err := globalConfig.SetRequestModel(req.RequestModel); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   err.Error(),
-			})
-			return
-		}
-	}
-
-	if req.ResponseModel != "" {
-		if err := globalConfig.SetResponseModel(req.ResponseModel); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   err.Error(),
+				"error":   fmt.Sprintf("Failed to update request configs: %v", err),
 			})
 			return
 		}
 	}
 
 	if wui.logger != nil {
-		wui.logger.LogAction(memory.ActionUpdateDefaults, map[string]interface{}{
-			"default_provider": req.DefaultProvider,
-			"default_model":    req.DefaultModel,
-			"request_model":    req.RequestModel,
-			"response_model":   req.ResponseModel,
-		}, true, "Global defaults updated via web interface")
+		logData := map[string]interface{}{
+			"request_configs_count": 0,
+		}
+
+		if req.RequestConfigs != nil {
+			logData["request_configs_count"] = len(req.RequestConfigs)
+		}
+
+		wui.logger.LogAction(memory.ActionUpdateDefaults, logData, true, "Request configs updated via web interface")
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Defaults updated successfully",
+		"message": "Request configs updated successfully",
 	})
 }
 
