@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { Box, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography, IconButton } from '@mui/material';
-import { Link as RouterLink, useLocation } from 'react-router-dom';
-import { Dashboard as DashboardIcon, Settings as SettingsIcon, History as HistoryIcon, CloudQueue as CloudIcon, Menu as MenuIcon } from '@mui/icons-material';
+import { Box, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography, IconButton, Menu, MenuItem } from '@mui/material';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+import { Dashboard as DashboardIcon, Settings as SettingsIcon, History as HistoryIcon, CloudQueue as CloudIcon, Menu as MenuIcon, Logout as LogoutIcon, AccountCircle as AccountIcon } from '@mui/icons-material';
 import { useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface LayoutProps {
   children: ReactNode;
@@ -12,10 +13,27 @@ const drawerWidth = 260;
 
 const Layout = ({ children }: LayoutProps) => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
+  };
+
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+    handleMenuClose();
   };
 
   const isActive = (path: string) => {
@@ -193,6 +211,33 @@ const Layout = ({ children }: LayoutProps) => {
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               LLM Config & Proxy Management
             </Typography>
+            <IconButton
+              color="inherit"
+              onClick={handleMenuOpen}
+              sx={{ color: 'text.secondary' }}
+            >
+              <AccountIcon />
+            </IconButton>
+            <Menu
+              anchorEl={anchorEl}
+              open={Boolean(anchorEl)}
+              onClose={handleMenuClose}
+              anchorOrigin={{
+                vertical: 'bottom',
+                horizontal: 'right',
+              }}
+              transformOrigin={{
+                vertical: 'top',
+                horizontal: 'right',
+              }}
+            >
+              <MenuItem onClick={handleLogout}>
+                <ListItemIcon>
+                  <LogoutIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Logout</ListItemText>
+              </MenuItem>
+            </Menu>
           </Box>
         </Box>
 

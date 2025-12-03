@@ -2,16 +2,37 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
+// Get auth token from localStorage
+const getAuthToken = (): string | null => {
+  return localStorage.getItem('auth_token');
+};
+
 async function fetchUIAPI(url: string, options: RequestInit = {}): Promise<any> {
   try {
     const fullUrl = url.startsWith('/api/') ? url : `/api${url}`;
+    const token = getAuthToken();
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...options.headers as Record<string, string>,
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(fullUrl, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
       ...options,
     });
+
+    // Handle 401 Unauthorized - token is invalid or expired
+    if (response.status === 401) {
+      localStorage.removeItem('auth_token');
+      window.location.href = '/login';
+      return { success: false, error: 'Authentication required' };
+    }
+
     return await response.json();
   } catch (error) {
     console.error('UI API Error:', error);
@@ -22,13 +43,29 @@ async function fetchUIAPI(url: string, options: RequestInit = {}): Promise<any> 
 async function fetchServerAPI(url: string, options: RequestInit = {}): Promise<any> {
   try {
     const fullUrl = url.startsWith('/api/') ? API_BASE_URL + url : url;
+    const token = getAuthToken();
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...options.headers as Record<string, string>,
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(fullUrl, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
       ...options,
     });
+
+    // Handle 401 Unauthorized - token is invalid or expired
+    if (response.status === 401) {
+      localStorage.removeItem('auth_token');
+      window.location.href = '/login';
+      return { success: false, error: 'Authentication required' };
+    }
+
     return await response.json();
   } catch (error) {
     console.error('Server API Error:', error);

@@ -49,11 +49,23 @@ func NewGlobalConfig() (*GlobalConfig, error) {
 				},
 			}
 			config.DefaultRequestID = 0
+			// Set default auth token if not already set
+			if config.Token == "" {
+				config.Token = "tingly-box-auth-token"
+			}
 			if err := config.save(); err != nil {
 				return nil, fmt.Errorf("failed to create default global config: %w", err)
 			}
 		} else {
 			return nil, fmt.Errorf("failed to load global config: %w", err)
+		}
+	}
+
+	// Ensure token exists even for existing configs
+	if config.Token == "" {
+		config.Token = "tingly-box-auth-token"
+		if err := config.save(); err != nil {
+			return nil, fmt.Errorf("failed to set default auth token: %w", err)
 		}
 	}
 

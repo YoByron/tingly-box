@@ -120,6 +120,7 @@ func (wui *WebUI) setupAPIRoutes() {
 	}
 
 	api := wui.router.Group("/api")
+	api.Use(wui.authMiddleware()) // Apply authentication to all API routes
 	{
 		// Providers management
 		api.GET("/providers", wui.GetProviders)
@@ -176,6 +177,7 @@ func (wui *WebUI) SetupRoutesOnServer(mainRouter *gin.Engine) {
 
 	// Add API routes for web UI functionality on main router
 	api := mainRouter.Group("/api")
+	api.Use(wui.authMiddleware()) // Apply authentication to all API routes
 	{
 		// Providers management
 		api.GET("/providers", wui.GetProviders)
@@ -866,6 +868,58 @@ func (wui *WebUI) GetProviderModels(c *gin.Context) {
 		"success": true,
 		"data":    providerModels,
 	})
+}
+
+// authMiddleware validates the authentication token
+func (wui *WebUI) authMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get the auth token from global config
+		globalConfig := wui.config.GetGlobalConfig()
+		if globalConfig == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Global config not available",
+			})
+			c.Abort()
+			return
+		}
+
+		expectedToken := globalConfig.GetToken()
+		if expectedToken == "" {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Auth token not configured",
+			})
+			c.Abort()
+			return
+		}
+
+		// Get token from Authorization header
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"error":   "Authorization header required",
+			})
+			c.Abort()
+			return
+		}
+
+		// Support both "Bearer token" and just "token" formats
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		token = strings.TrimSpace(token)
+
+		if token != expectedToken {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"error":   "Invalid authentication token",
+			})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
 }
 
 // GetShutdownChannel returns the shutdown channel for the main process to listen on
