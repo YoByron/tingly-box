@@ -1,13 +1,9 @@
-import { Alert, Box, CircularProgress } from '@mui/material';
+import Refresh from '@mui/icons-material/Refresh';
+import { Alert, Box, Button, CircularProgress, IconButton, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import ActivityLog from '../components/ActivityLog';
-import AuthenticationCard from '../components/AuthenticationCard';
 import CardGrid, { CardGridItem } from '../components/CardGrid';
-import ProviderSelectionCard from '../components/ProviderSelectionCard';
-import ProvidersSummaryCard from '../components/ProvidersSummaryCard';
-import RecentActivityCard from '../components/RecentActivityCard';
-import ServerConfiguration from '../components/ServerConfiguration';
-import ServerStatusCard from '../components/ServerStatusCard';
+import ProviderCard from '../components/ProviderCard';
 import ServerStatusControl from '../components/ServerStatusControl';
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
@@ -16,7 +12,6 @@ const System = () => {
     const [serverStatus, setServerStatus] = useState<any>(null);
     const [activityLog, setActivityLog] = useState<any[]>([]);
     const [providersStatus, setProvidersStatus] = useState<any>(null);
-    const [recentActivity, setRecentActivity] = useState<any[]>([]);
     const [defaults, setDefaults] = useState<any>({});
     const [providers, setProviders] = useState<any[]>([]);
     const [providerModels, setProviderModels] = useState<any>({});
@@ -46,7 +41,6 @@ const System = () => {
             loadServerStatus(),
             loadActivityLog(),
             loadProvidersStatus(),
-            loadRecentActivity(),
             loadDefaults(),
             loadProviderSelectionPanel(),
         ]);
@@ -74,12 +68,6 @@ const System = () => {
         }
     };
 
-    const loadRecentActivity = async () => {
-        const result = await api.getHistory(5);
-        if (result.success) {
-            setRecentActivity(result.data);
-        }
-    };
 
     const loadDefaults = async () => {
         const result = await api.getDefaults();
@@ -233,91 +221,123 @@ const System = () => {
             )}
 
             <CardGrid>
-                {/* Server Status */}
+                {/* Server Status - Consolidated */}
                 <CardGridItem xs={12} md={6}>
                     <UnifiedCard
-                        title="Server Status"
+                        title="Server Status & Control"
                         subtitle={serverStatus ? (serverStatus.server_running ? "Server is running" : "Server is stopped") : "Loading..."}
                         size="large"
+                        rightAction={
+                            <IconButton onClick={loadServerStatus} size="small" title="Refresh Status">
+                                <Refresh />
+                            </IconButton>
+                        }
                     >
                         {serverStatus ? (
-                            <ServerStatusControl
-                                serverStatus={serverStatus}
-                                onStartServer={handleStartServer}
-                                onStopServer={handleStopServer}
-                                onRestartServer={handleRestartServer}
-                            />
+                            <>
+                                <ServerStatusControl
+                                    serverStatus={serverStatus}
+                                    onStartServer={handleStartServer}
+                                    onStopServer={handleStopServer}
+                                    onRestartServer={handleRestartServer}
+                                    onGenerateToken={handleGenerateToken}
+                                />
+                                {serverStatus.request_count !== undefined && (
+                                    <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.50', borderRadius: 2 }}>
+                                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                                            Total Requests
+                                        </Typography>
+                                        <Typography variant="h6" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                                            {serverStatus.request_count}
+                                        </Typography>
+                                    </Box>
+                                )}
+                            </>
                         ) : (
                             <div>Loading...</div>
                         )}
                     </UnifiedCard>
                 </CardGridItem>
 
-                {/* Server Status Card */}
-                <CardGridItem xs={12} md={6}>
-                    <ServerStatusCard
-                        serverStatus={serverStatus}
-                        onLoadServerStatus={loadServerStatus}
-                    />
-                </CardGridItem>
 
-                {/* Configuration */}
+                {/* Providers - Consolidated */}
                 <CardGridItem xs={12} md={6}>
                     <UnifiedCard
-                        title="Configuration"
-                        subtitle="Server configuration and management"
+                        title="Providers Management"
+                        subtitle={`Total: ${providersStatus ? providersStatus.length : 0} providers | Enabled: ${providersStatus ? providersStatus.filter((p: any) => p.enabled).length : 0}`}
                         size="large"
                     >
-                        {serverStatus ? (
-                            <ServerConfiguration
-                                serverStatus={serverStatus}
-                                onRefreshStatus={loadServerStatus}
-                                onGenerateToken={handleGenerateToken}
-                            />
-                        ) : (
-                            <div>Loading...</div>
-                        )}
+                        <Stack spacing={2}>
+                            <Box sx={{ p: 2, backgroundColor: 'grey.50', borderRadius: 2 }}>
+                                <Typography variant="body2" color="text.secondary" gutterBottom>
+                                    Provider Overview
+                                </Typography>
+                                <Typography variant="body1" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                                    {providersStatus ? `${providersStatus.filter((p: any) => p.enabled).length} / ${providersStatus.length} Enabled` : 'Loading...'}
+                                </Typography>
+                            </Box>
+
+                            <Box sx={{ maxHeight: 250, overflowY: 'auto' }}>
+                                {providers.length > 0 ? (
+                                    <CardGrid>
+                                        {providers.map((provider) => {
+                                            const isDefault = defaults.defaultProvider === provider.name;
+                                            return (
+                                                <CardGridItem xs={12} sm={6} key={provider.name}>
+                                                    <ProviderCard
+                                                        provider={provider}
+                                                        variant="simple"
+                                                        isDefault={isDefault}
+                                                        providerModels={providerModels}
+                                                        onSetDefault={setDefaultProviderHandler}
+                                                        onFetchModels={fetchProviderModels}
+                                                    />
+                                                </CardGridItem>
+                                            );
+                                        })}
+                                    </CardGrid>
+                                ) : (
+                                    <Box textAlign="center" py={3}>
+                                        <Typography variant="body2" color="text.secondary">
+                                            No providers configured yet
+                                        </Typography>
+                                    </Box>
+                                )}
+                            </Box>
+
+                            <Button
+                                variant="contained"
+                                onClick={() => window.location.href = '/providers'}
+                            >
+                                Manage Providers
+                            </Button>
+                        </Stack>
                     </UnifiedCard>
                 </CardGridItem>
 
-                {/* Provider Selection */}
-                <CardGridItem xs={12} md={6}>
-                    <ProviderSelectionCard
-                        providers={providers}
-                        defaults={defaults}
-                        providerModels={providerModels}
-                        onSetDefault={setDefaultProviderHandler}
-                        onFetchModels={fetchProviderModels}
-                    />
-                </CardGridItem>
 
-                {/* Providers Summary */}
-                <CardGridItem xs={12} md={6}>
-                    <ProvidersSummaryCard providersStatus={providersStatus} />
-                </CardGridItem>
 
-                {/* Authentication */}
-                <CardGridItem xs={12} md={6}>
-                    <AuthenticationCard />
-                </CardGridItem>
-
-                {/* Recent Activity */}
-                <CardGridItem xs={12} md={6}>
-                    <RecentActivityCard recentActivity={recentActivity} />
-                </CardGridItem>
-
-                {/* Activity Log */}
+                {/* Activity Log - Enhanced */}
                 <CardGridItem xs={12}>
                     <UnifiedCard
-                        title="Activity Log"
+                        title="Activity Log & History"
                         subtitle={`${activityLog.length} recent activity entries`}
                         size="large"
                     >
-                        <ActivityLog
-                            activityLog={activityLog}
-                            onLoadActivityLog={loadActivityLog}
-                            onClearLog={clearLog}
-                        />
+                        <Stack spacing={2}>
+                            <Button
+                                variant="outlined"
+                                onClick={() => window.location.href = '/history'}
+                                sx={{ mb: 1 }}
+                            >
+                                View Full History
+                            </Button>
+                            <ActivityLog
+                                activityLog={activityLog}
+                                onLoadActivityLog={loadActivityLog}
+                                onClearLog={clearLog}
+                            />
+                        </Stack>
                     </UnifiedCard>
                 </CardGridItem>
             </CardGrid>

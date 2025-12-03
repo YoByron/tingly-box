@@ -10,6 +10,7 @@ interface ServerStatusControlProps {
     onStartServer: () => void;
     onStopServer: () => void;
     onRestartServer: () => void;
+    onGenerateToken?: () => void;
 }
 
 const ServerStatusControl = ({
@@ -17,6 +18,7 @@ const ServerStatusControl = ({
     onStartServer,
     onStopServer,
     onRestartServer,
+    onGenerateToken,
 }: ServerStatusControlProps) => {
     return (
         <Stack spacing={2}>
@@ -71,6 +73,11 @@ const ServerStatusControl = ({
                 <Button variant="contained" onClick={onRestartServer}>
                     Restart
                 </Button>
+                {onGenerateToken && (
+                    <Button variant="outlined" onClick={onGenerateToken}>
+                        Generate Token
+                    </Button>
+                )}
             </Stack>
         </Stack>
     );
