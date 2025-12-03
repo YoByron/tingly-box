@@ -5,6 +5,7 @@ import {
     Divider,
     FormControl,
     IconButton,
+    InputAdornment,
     InputLabel,
     MenuItem,
     Select,
@@ -437,71 +438,114 @@ const ModelConfigCard = ({
                                                             placeholder="Enter model name manually"
                                                             fullWidth
                                                             size="small"
+                                                            InputProps={{
+                                                                endAdornment: (
+                                                                    <InputAdornment position="end">
+                                                                        <IconButton
+                                                                            size="small"
+                                                                            onClick={() =>
+                                                                                updateProvider(
+                                                                                    record.id,
+                                                                                    provider.id,
+                                                                                    'isManualInput',
+                                                                                    false
+                                                                                )
+                                                                            }
+                                                                            title="Switch to dropdown"
+                                                                            edge="end"
+                                                                        >
+                                                                            <CheckIcon fontSize="small" />
+                                                                        </IconButton>
+                                                                    </InputAdornment>
+                                                                ),
+                                                            }}
                                                         />
                                                     </FormControl>
                                                 ) : (
-                                                    <FormControl
-                                                        sx={{ flex: 1 }}
-                                                        size="small"
-                                                        disabled={!provider.provider}
-                                                    >
-                                                        <InputLabel>Model</InputLabel>
-                                                        <Select
-                                                            value={provider.model}
-                                                            onChange={(e) =>
-                                                                updateProvider(
-                                                                    record.id,
-                                                                    provider.id,
-                                                                    'model',
-                                                                    e.target.value
-                                                                )
-                                                            }
-                                                            label="Model"
-                                                        >
-                                                            <MenuItem value="">Select</MenuItem>
-                                                            {/* Show current model if it exists and is not in the API list */}
-                                                            {provider.model && !providerModels[provider.provider]?.models.includes(provider.model) && (
-                                                                <MenuItem key="current-manual" value={provider.model}>
-                                                                    {provider.model} (custom)
-                                                                </MenuItem>
-                                                            )}
-                                                            {/* Show models from API */}
-                                                            {providerModels[provider.provider]?.models.map(
-                                                                (model: string) => (
-                                                                    <MenuItem key={model} value={model}>
-                                                                        {model}
+                                                    <Box sx={{ flex: 1, position: 'relative' }}>
+                                                        <FormControl size="small" disabled={!provider.provider} fullWidth>
+                                                            <InputLabel>Model</InputLabel>
+                                                            <Select
+                                                                value={provider.model}
+                                                                onChange={(e) =>
+                                                                    updateProvider(
+                                                                        record.id,
+                                                                        provider.id,
+                                                                        'model',
+                                                                        e.target.value
+                                                                    )
+                                                                }
+                                                                label="Model"
+                                                                sx={{
+                                                                    '& .MuiOutlinedInput-notchedOutline': {
+                                                                        paddingRight: '110px', // Make room for buttons
+                                                                    },
+                                                                }}
+                                                            >
+                                                                <MenuItem value="">Select</MenuItem>
+                                                                {/* Show current model if it exists and is not in the API list */}
+                                                                {provider.model && !providerModels[provider.provider]?.models.includes(provider.model) && (
+                                                                    <MenuItem key="current-manual" value={provider.model}>
+                                                                        {provider.model} (custom)
                                                                     </MenuItem>
-                                                                )
-                                                            )}
-                                                        </Select>
-                                                    </FormControl>
+                                                                )}
+                                                                {/* Show models from API */}
+                                                                {providerModels[provider.provider]?.models.map(
+                                                                    (model: string) => (
+                                                                        <MenuItem key={model} value={model}>
+                                                                            {model}
+                                                                        </MenuItem>
+                                                                    )
+                                                                )}
+                                                            </Select>
+                                                        </FormControl>
+                                                        <Box
+                                                            sx={{
+                                                                position: 'absolute',
+                                                                right: 8,
+                                                                top: '50%',
+                                                                transform: 'translateY(-50%)',
+                                                                display: 'flex',
+                                                                gap: 0.5,
+                                                                bgcolor: 'background.paper',
+                                                                borderRadius: 1,
+                                                                padding: '2px',
+                                                                pointerEvents: 'auto',
+                                                            }}
+                                                        >
+                                                            <IconButton
+                                                                size="small"
+                                                                onClick={() => handleRefreshProviderModels(provider.provider)}
+                                                                disabled={!provider.provider}
+                                                                title="Refresh models"
+                                                                sx={{
+                                                                    padding: '4px',
+                                                                    '&:hover': { bgcolor: 'action.hover' }
+                                                                }}
+                                                            >
+                                                                <RefreshIcon fontSize="small" />
+                                                            </IconButton>
+                                                            <IconButton
+                                                                size="small"
+                                                                onClick={() =>
+                                                                    updateProvider(
+                                                                        record.id,
+                                                                        provider.id,
+                                                                        'isManualInput',
+                                                                        true
+                                                                    )
+                                                                }
+                                                                title="Switch to manual input"
+                                                                sx={{
+                                                                    padding: '4px',
+                                                                    '&:hover': { bgcolor: 'action.hover' }
+                                                                }}
+                                                            >
+                                                                <EditIcon fontSize="small" />
+                                                            </IconButton>
+                                                          </Box>
+                                                    </Box>
                                                 )}
-
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => handleRefreshProviderModels(provider.provider)}
-                                                    disabled={!provider.provider}
-                                                    title="Refresh models"
-                                                    sx={{ p: 0.5 }}
-                                                >
-                                                    <RefreshIcon fontSize="small" />
-                                                </IconButton>
-
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() =>
-                                                        updateProvider(
-                                                            record.id,
-                                                            provider.id,
-                                                            'isManualInput',
-                                                            !provider.isManualInput
-                                                        )
-                                                    }
-                                                    title={provider.isManualInput ? "Switch to dropdown" : "Switch to manual input"}
-                                                    sx={{ p: 0.5 }}
-                                                >
-                                                    {provider.isManualInput ? <CheckIcon fontSize="small" /> : <EditIcon fontSize="small" />}
-                                                </IconButton>
 
                                                 <IconButton
                                                     size="small"
