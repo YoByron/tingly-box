@@ -1,0 +1,47 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  GREETING: Hello, World!
+  VERSION: ""
+  BUILD_DIR: build
+  DIST_DIR: build/dist
+
+  APP_NAME: "myapp"
+  BIN_DIR: "bin"
+  VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
+
+tasks:
+  default:
+    cmds:
+      - echo "{{.GREETING}}"
+    silent: true
+
+  start:
+    cmds:
+      - ./build/tingly start --ui
+
+  build:
+    cmds:
+      - |
+        mkdir -p build
+        go build -o ./build/tingly ./cmd/tingly
+
+  dev:
+    cmds:
+      - task: ui:dist
+      - |
+        go run ./cmd/tingly start
+
+  ui:dev:
+    cmds:
+      - |
+        cd frontend; pnpm dev
+
+  ui:dist:
+    cmds:
+      - |
+        cd frontend; pnpm build
+      - |
+        cp -R frontend/dist internal/server/web/
