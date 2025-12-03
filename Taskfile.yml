@@ -46,3 +46,66 @@ tasks:
         cd frontend; pnpm build
       - |
         cp -R frontend/dist internal/server/web/dist
+
+  dist:
+    desc: Build cross-platform distributions for Windows, Linux, and macOS
+    cmds:
+      - task: ui:dist
+      - |
+        echo "Building distributions for version {{.VERSION}}..."
+        
+        # Create distribution directory
+        mkdir -p {{.DIST_DIR}}
+        
+        # Build for Windows (amd64)
+        echo "Building for Windows (amd64)..."
+        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/tingly-{{.VERSION}}-windows-amd64.exe ./cmd/tingly
+        
+        # Build for Linux (amd64)
+        echo "Building for Linux (amd64)..."
+        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/tingly-{{.VERSION}}-linux-amd64 ./cmd/tingly
+        
+        # Build for macOS (amd64)
+        echo "Building for macOS (amd64)..."
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/tingly-{{.VERSION}}-darwin-amd64 ./cmd/tingly
+        
+        # Build for macOS (arm64)
+        echo "Building for macOS (arm64)..."
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/tingly-{{.VERSION}}-darwin-arm64 ./cmd/tingly
+        
+        # Create archives
+        echo "Creating archives..."
+        cd {{.DIST_DIR}}
+        ls
+        
+        # # Windows archive (zip)
+        # zip -q tingly-{{.VERSION}}-windows-amd64.zip tingly-{{.VERSION}}-windows-amd64.exe
+        
+        # # Linux archive (tar.gz)
+        # tar -czf tingly-{{.VERSION}}-linux-amd64.tar.gz tingly-{{.VERSION}}-linux-amd64
+        
+        # # macOS archives (tar.gz)
+        # tar -czf tingly-{{.VERSION}}-darwin-amd64.tar.gz tingly-{{.VERSION}}-darwin-amd64
+        # tar -czf tingly-{{.VERSION}}-darwin-arm64.tar.gz tingly-{{.VERSION}}-darwin-arm64
+        
+        # # Create universal macOS binary
+        # echo "Creating universal macOS binary..."
+        # lipo -create -output tingly-{{.VERSION}}-darwin-universal tingly-{{.VERSION}}-darwin-amd64 tingly-{{.VERSION}}-darwin-arm64
+        # tar -czf tingly-{{.VERSION}}-darwin-universal.tar.gz tingly-{{.VERSION}}-darwin-universal
+        
+        # # Clean up binaries after creating archives
+        # rm -f tingly-{{.VERSION}}-windows-amd64.exe tingly-{{.VERSION}}-linux-amd64 tingly-{{.VERSION}}-darwin-amd64 tingly-{{.VERSION}}-darwin-arm64 tingly-{{.VERSION}}-darwin-universal
+        
+        # cd ../..
+        
+        # # List created files
+        # echo "Build completed! Created files:"
+        # ls -la {{.DIST_DIR}}/
+        
+        # echo ""
+        # echo "Distribution files created in {{.DIST_DIR}}/:"
+        # echo "- tingly-{{.VERSION}}-windows-amd64.zip"
+        # echo "- tingly-{{.VERSION}}-linux-amd64.tar.gz"
+        # echo "- tingly-{{.VERSION}}-darwin-amd64.tar.gz"
+        # echo "- tingly-{{.VERSION}}-darwin-arm64.tar.gz"
+        # echo "- tingly-{{.VERSION}}-darwin-universal.tar.gz"

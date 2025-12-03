@@ -1,0 +1,511 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      createRelease:
+        description: 'Create GitHub Release'
+        required: false
+        default: 'false'
+        type: boolean
+      releaseVersion:
+        description: 'Release version (e.g., v1.0.0)'
+        required: false
+        type: string
+
+env:
+  GO_VERSION: '1.25'
+  NODE_VERSION: '20'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: ./frontend
+
+      - name: Build frontend
+        run: pnpm build
+        working-directory: ./frontend
+
+      - name: Build Go binary (Linux)
+        run: |
+          mkdir -p build
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ./build/tingly-linux-amd64 ./cmd/tingly
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o ./build/tingly-linux-arm64 ./cmd/tingly
+          chmod +x ./build/tingly-linux-*
+
+      - name: Build Go binary (macOS)
+        run: |
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ./build/tingly-macos-amd64 ./cmd/tingly
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ./build/tingly-macos-arm64 ./cmd/tingly
+          chmod +x ./build/tingly-macos-*
+
+      - name: Build Go binary (Windows)
+        run: |
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ./build/tingly-windows-amd64.exe ./cmd/tingly
+          GOOS=windows GOARCH=arm64 go build -ldflags="-s -w" -o ./build/tingly-windows-arm64.exe ./cmd/tingly
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: ./build/
+          retention-days: 7
+
+  create-packages:
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-amd64
+            package: tar.gz
+          - os: ubuntu-latest
+            platform: linux-arm64
+            package: tar.gz
+          - os: macos-latest
+            platform: macos-amd64
+            package: zip
+          - os: macos-latest
+            platform: macos-arm64
+            package: zip
+          - os: windows-latest
+            platform: windows-amd64
+            package: zip
+          - os: windows-latest
+            platform: windows-arm64
+            package: zip
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: ./build
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install npx packaging tools
+        run: |
+          npm install -g create-dmg @app/sign-npm pkg compress-zip
+
+      - name: Create Linux package
+        if: matrix.platform == 'linux-amd64' || matrix.platform == 'linux-arm64'
+        run: |
+          PLATFORM=${{ matrix.platform }}
+          ARCHIVE_NAME="tingly-${PLATFORM}"
+          mkdir -p dist/$ARCHIVE_NAME
+          cp ./build/tingly-$PLATFORM dist/$ARCHIVE_NAME/tingly
+          chmod +x dist/$ARCHIVE_NAME/tingly
+
+          # Create a simple install script
+          cat > dist/$ARCHIVE_NAME/install.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          INSTALL_DIR="/usr/local/bin"
+          echo "Installing Tingly to $INSTALL_DIR..."
+          sudo cp tingly $INSTALL_DIR/
+          sudo chmod +x $INSTALL_DIR/tingly
+          echo "Tingly installed successfully!"
+          tingly --version
+          EOF
+          chmod +x dist/$ARCHIVE_NAME/install.sh
+
+          # Create tar.gz package
+          cd dist
+          tar -czf $ARCHIVE_NAME.tar.gz $ARCHIVE_NAME/
+
+      - name: Create macOS package (zip)
+        if: matrix.platform == 'macos-amd64' || matrix.platform == 'macos-arm64'
+        run: |
+          PLATFORM=${{ matrix.platform }}
+          ARCHIVE_NAME="tingly-${PLATFORM}"
+          mkdir -p dist/$ARCHIVE_NAME
+          cp ./build/tingly-$PLATFORM dist/$ARCHIVE_NAME/tingly
+          chmod +x dist/$ARCHIVE_NAME/tingly
+
+          # Create Info.plist for macOS
+          cat > dist/$ARCHIVE_NAME/Info.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key>
+            <string>tingly</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.tingly.box</string>
+            <key>CFBundleName</key>
+            <string>Tingly</string>
+            <key>CFBundleVersion</key>
+            <string>1.0</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0</string>
+          </dict>
+          </plist>
+          EOF
+
+          # Create install script
+          cat > dist/$ARCHIVE_NAME/install.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          INSTALL_DIR="/usr/local/bin"
+          echo "Installing Tingly to $INSTALL_DIR..."
+          sudo cp tingly $INSTALL_DIR/
+          sudo chmod +x $INSTALL_DIR/tingly
+          echo "Tingly installed successfully!"
+          tingly --version
+          EOF
+          chmod +x dist/$ARCHIVE_NAME/install.sh
+
+          # Create zip package
+          cd dist
+          zip -r $ARCHIVE_NAME.zip $ARCHIVE_NAME/ -x "*.DS_Store"
+
+      - name: Create Windows package (zip)
+        if: matrix.platform == 'windows-amd64' || matrix.platform == 'windows-arm64'
+        run: |
+          PLATFORM=${{ matrix.platform }}
+          ARCHIVE_NAME="tingly-${PLATFORM}"
+          mkdir -p dist/$ARCHIVE_NAME
+          cp ./build/tingly-$PLATFORM.exe dist/$ARCHIVE_NAME/tingly.exe
+
+          # Create batch install script
+          @echo off > dist\$ARCHIVE_NAME\install.bat
+          echo Installing Tingly... >> dist\$ARCHIVE_NAME\install.bat
+          set INSTALL_DIR=C:\Program Files\Tingly
+          if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
+          copy tingly.exe "%INSTALL_DIR%\" >nul
+          set PATH=%PATH%;%INSTALL_DIR%
+          echo Tingly installed to %INSTALL_DIR% >> dist\$ARCHIVE_NAME\install.bat
+          echo Run: tingly --version >> dist\$ARCHIVE_NAME\install.bat
+          pause
+
+          # Create README for Windows
+          echo Tingly Box - AI Provider Management CLI > dist\$ARCHIVE_NAME\README.txt
+          echo. >> dist\$ARCHIVE_NAME\README.txt
+          echo Installation: >> dist\$ARCHIVE_NAME\README.txt
+          echo 1. Run install.bat as Administrator >> dist\$ARCHIVE_NAME\README.txt
+          echo 2. Or manually copy tingly.exe to your desired location >> dist\$ARCHIVE_NAME\README.txt
+          echo. >> dist\$ARCHIVE_NAME\README.txt
+          echo Usage: >> dist\$ARCHIVE_NAME\README.txt
+          echo   tingly --version >> dist\$ARCHIVE_NAME\README.txt
+          echo   tingly start >> dist\$ARCHIVE_NAME\README.txt
+
+          # Create zip package
+          cd dist
+          compress-zip $ARCHIVE_NAME.zip $ARCHIVE_NAME/
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.platform }}
+          path: ./dist/
+          retention-days: 30
+
+  create-npm-distribution:
+    needs: [build, create-packages]
+    runs-on: ubuntu-latest
+    if: |
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.createRelease == 'true')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all packages
+        uses: actions/download-artifact@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Create distribution directory
+        run: |
+          mkdir -p dist-npm
+          mkdir -p dist-npm/bin
+
+      - name: Copy binaries to npm package
+        run: |
+          # Copy all binaries
+          cp packages-linux-amd64/tingly-* dist-npm/bin/tingly-linux-amd64 2>/dev/null || true
+          cp packages-linux-arm64/tingly-* dist-npm/bin/tingly-linux-arm64 2>/dev/null || true
+          cp packages-macos-amd64/tingly-* dist-npm/bin/tingly-macos-amd64 2>/dev/null || true
+          cp packages-macos-arm64/tingly-* dist-npm/bin/tingly-macos-arm64 2>/dev/null || true
+          cp packages-windows-amd64/tingly-* dist-npm/bin/tingly-windows-amd64.exe 2>/dev/null || true
+          cp packages-windows-arm64/tingly-* dist-npm/bin/tingly-windows-arm64.exe 2>/dev/null || true
+
+          chmod +x dist-npm/bin/*
+
+      - name: Create package.json for npm distribution
+        run: |
+          # Get version from tag or input
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.releaseVersion }}" ]; then
+            VERSION="${{ github.event.inputs.releaseVersion }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/}
+          fi
+          echo "Creating npm package for version $VERSION"
+
+          cat > dist-npm/package.json << EOF
+          {
+            "name": "tingly-box",
+            "version": "$VERSION",
+            "description": "Tingly Box - AI Provider Management CLI",
+            "bin": {
+              "tingly": "./bin/tingly-\${node.platform}-\${node.arch}"
+            },
+            "os": [
+              "linux",
+              "darwin",
+              "win32"
+            ],
+            "cpu": [
+              "x64",
+              "arm64"
+            ],
+            "scripts": {
+              "install": "node install.js"
+            },
+            "keywords": [
+              "cli",
+              "ai",
+              "openai",
+              "management"
+            ],
+            "license": "MIT",
+            "repository": {
+              "type": "git",
+              "url": "https://github.com/${{ github.repository }}"
+            }
+          }
+          EOF
+
+      - name: Create install script
+        run: |
+          cat > dist-npm/install.js << 'EOF'
+          const fs = require('fs');
+          const path = require('path');
+
+          const platform = process.platform;
+          const arch = process.arch;
+
+          const platformMap = {
+            'linux': 'linux',
+            'darwin': 'macos',
+            'win32': 'windows'
+          };
+
+          const archMap = {
+            'x64': 'amd64',
+            'arm64': 'arm64'
+          };
+
+          const binFile = `tingly-${platformMap[platform]}-${archMap[arch]}${platform === 'win32' ? '.exe' : ''}`;
+          const binPath = path.join(__dirname, 'bin', binFile);
+
+          if (!fs.existsSync(binPath)) {
+            console.error(`Binary not found for platform ${platform} and architecture ${arch}`);
+            process.exit(1);
+          }
+
+          console.log(`Installing Tingly for ${platform} ${arch}...`);
+
+          const installDir = path.join(process.env.HOME || process.env.USERPROFILE, '.local', 'bin');
+          if (!fs.existsSync(installDir)) {
+            fs.mkdirSync(installDir, { recursive: true });
+          }
+
+          const destPath = path.join(installDir, 'tingly' + (platform === 'win32' ? '.exe' : ''));
+          fs.copyFileSync(binPath, destPath);
+
+          if (platform !== 'win32') {
+            fs.chmodSync(destPath, 0o755);
+          }
+
+          console.log(`Tingly installed to ${destPath}`);
+          console.log('Make sure to add ' + installDir + ' to your PATH');
+          EOF
+
+      - name: Create README for npm package
+        run: |
+          cat > dist-npm/README.md << 'EOF'
+          # Tingly Box
+
+          AI Provider Management CLI - A unified OpenAI-compatible endpoint for multiple AI providers.
+
+          ## Installation
+
+          ### Via npm (npx)
+          ```bash
+          npx tingly-box@latest
+          ```
+
+          ### Install globally
+          ```bash
+          npm install -g tingly-box
+          tingly --version
+          ```
+
+          ## Usage
+
+          ```bash
+          # Start the server
+          tingly start
+
+          # List configured providers
+          tingly list
+
+          # Add a new provider
+          tingly add
+
+          # Show status
+          tingly status
+          ```
+
+          ## Features
+
+          - Multi-provider AI support
+          - OpenAI-compatible API endpoint
+          - Dynamic configuration
+          - CLI and server modes
+
+          ## Supported Platforms
+
+          - Linux (x64, arm64)
+          - macOS (x64, arm64)
+          - Windows (x64, arm64)
+          EOF
+
+      - name: Create tarball for npm
+        run: |
+          cd dist-npm
+          npm pack
+
+      - name: Upload npm package
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: ./dist-npm/*.tgz
+          retention-days: 30
+
+  release:
+    needs: [create-packages, create-npm-distribution]
+    runs-on: ubuntu-latest
+    if: |
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.createRelease == 'true')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Create release directory
+        run: |
+          mkdir -p release
+          mv packages-*/* release/ 2>/dev/null || true
+          mv npm-package/*.tgz release/ 2>/dev/null || true
+
+      - name: Create checksums
+        run: |
+          cd release
+          sha256sum * > checksums.txt
+
+      - name: Generate changelog
+        run: |
+          # Extract version from tag or input
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.releaseVersion }}" ]; then
+            VERSION="${{ github.event.inputs.releaseVersion }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/}
+          fi
+          echo "## Changes in version $VERSION" > release-notes.md
+
+          # Get commits since last tag
+          git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 HEAD^)..HEAD >> release-notes.md 2>/dev/null || echo "- Initial release" >> release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          body_path: release-notes.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-npm:
+    needs: release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download npm package
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: ./npm-package
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish to npm
+        run: |
+          cd npm-package
+          npm publish *.tgz --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
