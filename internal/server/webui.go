@@ -884,11 +884,11 @@ func (wui *WebUI) authMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		expectedToken := globalConfig.GetToken()
+		expectedToken := globalConfig.GetUserToken()
 		if expectedToken == "" {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
-				"error":   "Auth token not configured",
+				"error":   "User auth token not configured",
 			})
 			c.Abort()
 			return

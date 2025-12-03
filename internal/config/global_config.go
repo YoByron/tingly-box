@@ -21,7 +21,8 @@ type RequestConfig struct {
 type GlobalConfig struct {
 	RequestConfigs   []RequestConfig `yaml:"request_configs" json:"request_configs"`       // List of request configurations
 	DefaultRequestID int             `yaml:"default_request_id" json:"default_request_id"` // Index of the default RequestConfig
-	Token            string          `yaml:"token" json:"token"`                           // API token for authentication
+	UserToken        string          `yaml:"user_token" json:"user_token"`                 // User token for UI and control API authentication
+	ModelToken       string          `yaml:"model_token" json:"model_token"`               // Model token for OpenAI and Anthropic API authentication
 	EncryptProviders bool            `yaml:"encrypt_providers" json:"encrypt_providers"`   // Whether to encrypt provider info (default false)
 	mutex            sync.RWMutex
 	configFile       string
@@ -49,9 +50,12 @@ func NewGlobalConfig() (*GlobalConfig, error) {
 				},
 			}
 			config.DefaultRequestID = 0
-			// Set default auth token if not already set
-			if config.Token == "" {
-				config.Token = "tingly-box-auth-token"
+			// Set default auth tokens if not already set
+			if config.UserToken == "" {
+				config.UserToken = "tingly-box-user-token"
+			}
+			if config.ModelToken == "" {
+				config.ModelToken = "tingly-box-model-token"
 			}
 			if err := config.save(); err != nil {
 				return nil, fmt.Errorf("failed to create default global config: %w", err)
@@ -61,11 +65,19 @@ func NewGlobalConfig() (*GlobalConfig, error) {
 		}
 	}
 
-	// Ensure token exists even for existing configs
-	if config.Token == "" {
-		config.Token = "tingly-box-auth-token"
+	// Ensure tokens exist even for existing configs
+	tokensUpdated := false
+	if config.UserToken == "" {
+		config.UserToken = "tingly-box-user-token"
+		tokensUpdated = true
+	}
+	if config.ModelToken == "" {
+		config.ModelToken = "tingly-box-model-token"
+		tokensUpdated = true
+	}
+	if tokensUpdated {
 		if err := config.save(); err != nil {
-			return nil, fmt.Errorf("failed to set default auth token: %w", err)
+			return nil, fmt.Errorf("failed to set default auth tokens: %w", err)
 		}
 	}
 
@@ -320,29 +332,71 @@ func (gc *GlobalConfig) HasDefaults() bool {
 	return false
 }
 
-// SetToken sets the API token
-func (gc *GlobalConfig) SetToken(token string) error {
+// SetUserToken sets the user token for UI and control API
+func (gc *GlobalConfig) SetUserToken(token string) error {
 	gc.mutex.Lock()
 	defer gc.mutex.Unlock()
 
-	gc.Token = token
+	gc.UserToken = token
 	return gc.save()
 }
 
-// GetToken returns the API token
-func (gc *GlobalConfig) GetToken() string {
+// GetUserToken returns the user token
+func (gc *GlobalConfig) GetUserToken() string {
 	gc.mutex.RLock()
 	defer gc.mutex.RUnlock()
 
-	return gc.Token
+	return gc.UserToken
 }
 
-// HasToken checks if a token is configured
-func (gc *GlobalConfig) HasToken() bool {
+// HasUserToken checks if a user token is configured
+func (gc *GlobalConfig) HasUserToken() bool {
 	gc.mutex.RLock()
 	defer gc.mutex.RUnlock()
 
-	return gc.Token != ""
+	return gc.UserToken != ""
+}
+
+// SetModelToken sets the model token for OpenAI and Anthropic APIs
+func (gc *GlobalConfig) SetModelToken(token string) error {
+	gc.mutex.Lock()
+	defer gc.mutex.Unlock()
+
+	gc.ModelToken = token
+	return gc.save()
+}
+
+// GetModelToken returns the model token
+func (gc *GlobalConfig) GetModelToken() string {
+	gc.mutex.RLock()
+	defer gc.mutex.RUnlock()
+
+	return gc.ModelToken
+}
+
+// HasModelToken checks if a model token is configured
+func (gc *GlobalConfig) HasModelToken() bool {
+	gc.mutex.RLock()
+	defer gc.mutex.RUnlock()
+
+	return gc.ModelToken != ""
+}
+
+// Legacy compatibility methods for backward compatibility
+
+// SetToken sets the user token (for backward compatibility)
+func (gc *GlobalConfig) SetToken(token string) error {
+	return gc.SetUserToken(token)
+}
+
+// GetToken returns the user token (for backward compatibility)
+func (gc *GlobalConfig) GetToken() string {
+	return gc.GetUserToken()
+}
+
+// HasToken checks if a user token is configured (for backward compatibility)
+func (gc *GlobalConfig) HasToken() bool {
+	return gc.HasUserToken()
 }
 
 // SetEncryptProviders sets whether to encrypt provider information

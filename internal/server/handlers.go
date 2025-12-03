@@ -111,13 +111,8 @@ func (s *Server) determineProvider(model, explicitProvider string) (*config.Prov
 	return nil, fmt.Errorf("no enabled providers available")
 }
 
-// AuthenticateMiddleware returns the JWT authentication middleware
-func (s *Server) AuthenticateMiddleware() gin.HandlerFunc {
-	return s.authenticateMiddleware()
-}
-
-// authenticateMiddleware provides JWT authentication
-func (s *Server) authenticateMiddleware() gin.HandlerFunc {
+// UserAuth middleware for UI and control API authentication
+func (s *Server) UserAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -146,10 +141,10 @@ func (s *Server) authenticateMiddleware() gin.HandlerFunc {
 
 		token := tokenParts[1]
 
-		// Check against global config token first
+		// Check against global config user token first
 		globalConfig := s.config.GetGlobalConfig()
-		if globalConfig != nil && globalConfig.HasToken() {
-			configToken := globalConfig.GetToken()
+		if globalConfig != nil && globalConfig.HasUserToken() {
+			configToken := globalConfig.GetUserToken()
 
 			// Remove "Bearer " prefix if present in the token
 			if strings.HasPrefix(token, "Bearer ") {
@@ -159,13 +154,13 @@ func (s *Server) authenticateMiddleware() gin.HandlerFunc {
 			// Direct token comparison
 			if token == configToken || strings.TrimPrefix(token, "Bearer ") == configToken {
 				// Token matches the one in global config, allow access
-				c.Set("client_id", "authenticated")
+				c.Set("client_id", "user_authenticated")
 				c.Next()
 				return
 			}
 		}
 
-		// If not matching global config token, validate as JWT token
+		// If not matching global config user token, validate as JWT token
 		claims, err := s.jwtManager.ValidateAPIKey(token)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, ErrorResponse{
@@ -182,6 +177,80 @@ func (s *Server) authenticateMiddleware() gin.HandlerFunc {
 		c.Set("client_id", claims.ClientID)
 		c.Next()
 	}
+}
+
+// ModelAuth middleware for OpenAI and Anthropic API authentication
+func (s *Server) ModelAuth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Authorization header required",
+					Type:    "invalid_request_error",
+				},
+			})
+			c.Abort()
+			return
+		}
+
+		// Extract token from "Bearer <token>" format
+		tokenParts := strings.Split(authHeader, " ")
+		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+			c.JSON(http.StatusUnauthorized, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Invalid authorization header format. Expected: 'Bearer <token>'",
+					Type:    "invalid_request_error",
+				},
+			})
+			c.Abort()
+			return
+		}
+
+		token := tokenParts[1]
+
+		// Check against global config model token first
+		globalConfig := s.config.GetGlobalConfig()
+		if globalConfig != nil && globalConfig.HasModelToken() {
+			configToken := globalConfig.GetModelToken()
+
+			// Remove "Bearer " prefix if present in the token
+			if strings.HasPrefix(token, "Bearer ") {
+				token = token[7:]
+			}
+
+			// Direct token comparison
+			if token == configToken || strings.TrimPrefix(token, "Bearer ") == configToken {
+				// Token matches the one in global config, allow access
+				c.Set("client_id", "model_authenticated")
+				c.Next()
+				return
+			}
+		}
+
+		// If not matching global config model token, validate as JWT token
+		claims, err := s.jwtManager.ValidateAPIKey(token)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Invalid or expired token",
+					Type:    "invalid_request_error",
+				},
+			})
+			c.Abort()
+			return
+		}
+
+		// Store client ID in context
+		c.Set("client_id", claims.ClientID)
+		c.Next()
+	}
+}
+
+// AuthenticateMiddleware returns the JWT authentication middleware (for backward compatibility)
+func (s *Server) AuthenticateMiddleware() gin.HandlerFunc {
+	// For backward compatibility, use UserAuth
+	return s.UserAuth()
 }
 
 // DetermineProviderAndModel resolves the model name and finds the appropriate provider

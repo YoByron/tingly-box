@@ -1,8 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
@@ -36,23 +39,40 @@ func NewServerWithOptions(appConfig *config.AppConfig, enableUI bool) *Server {
 	// Set Gin mode
 	gin.SetMode(gin.ReleaseMode)
 
-	// Check and generate token if needed
+	// Check and generate tokens if needed
 	globalConfig := appConfig.GetGlobalConfig()
-	if !globalConfig.HasToken() {
-		log.Println("No token found in global config, generating new token...")
-		jwtManager := auth.NewJWTManager(appConfig.GetJWTSecret())
-		apiKey, err := jwtManager.GenerateAPIKey("server")
+	jwtManager := auth.NewJWTManager(appConfig.GetJWTSecret())
+
+	if !globalConfig.HasUserToken() {
+		log.Println("No user token found in global config, generating new user token...")
+		apiKey, err := jwtManager.GenerateAPIKey("user")
 		if err != nil {
-			log.Printf("Failed to generate API key: %v", err)
+			log.Printf("Failed to generate user API key: %v", err)
 		} else {
-			if err := globalConfig.SetToken(apiKey); err != nil {
-				log.Printf("Failed to save generated token: %v", err)
+			if err := globalConfig.SetUserToken(apiKey); err != nil {
+				log.Printf("Failed to save generated user token: %v", err)
 			} else {
-				log.Printf("Generated and saved new API token: %s", apiKey)
+				log.Printf("Generated and saved new user API token: %s", apiKey)
 			}
 		}
 	} else {
-		log.Printf("Using existing token from global config")
+		log.Printf("Using existing user token from global config")
+	}
+
+	if !globalConfig.HasModelToken() {
+		log.Println("No model token found in global config, generating new model token...")
+		apiKey, err := jwtManager.GenerateAPIKey("model")
+		if err != nil {
+			log.Printf("Failed to generate model API key: %v", err)
+		} else {
+			if err := globalConfig.SetModelToken(apiKey); err != nil {
+				log.Printf("Failed to save generated model token: %v", err)
+			} else {
+				log.Printf("Generated and saved new model API token: %s", apiKey)
+			}
+		}
+	} else {
+		log.Printf("Using existing model token from global config")
 	}
 
 	// Initialize model manager
@@ -114,6 +134,8 @@ func (s *Server) setupConfigWatcher() {
 
 // setupMiddleware configures server middleware
 func (s *Server) setupMiddleware() {
+	s.router.Use(RequestLoggerMiddleware())
+
 	// Logger middleware
 	s.router.Use(gin.Logger())
 
@@ -135,6 +157,31 @@ func (s *Server) setupMiddleware() {
 	})
 }
 
+func RequestLoggerMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+
+		var buf bytes.Buffer
+		tee := io.TeeReader(c.Request.Body, &buf)
+		body, _ := ioutil.ReadAll(tee)
+		c.Request.Body = ioutil.NopCloser(&buf)
+
+		// Log details after the request is processed
+		duration := time.Since(start)
+		fmt.Printf("Method: %s | Path: %s | Status: %d | Headers: %v | Body: %s | Duration: %v\n",
+			c.Request.Method,
+			c.Request.URL.Path,
+			c.Request.Header,
+			c.Writer.Status(),
+			string(body),
+			duration,
+		)
+
+		// Process the request
+		c.Next()
+	}
+}
+
 // setupRoutes configures server routes
 func (s *Server) setupRoutes() {
 	// Health check endpoint
@@ -147,29 +194,29 @@ func (s *Server) setupRoutes() {
 	openaiV1 := s.router.Group("/openai/v1")
 	{
 		// Chat completions endpoint (OpenAI compatible)
-		openaiV1.POST("/chat/completions", s.AuthenticateMiddleware(), s.OpenAIChatCompletions)
+		openaiV1.POST("/chat/completions", s.ModelAuth(), s.OpenAIChatCompletions)
 		// Models endpoint (OpenAI compatible)
-		openaiV1.GET("/models", s.AuthenticateMiddleware(), s.ListModels)
+		openaiV1.GET("/models", s.ModelAuth(), s.ListModels)
 	}
 
 	// Anthropic v1 API group
 	anthropicV1 := s.router.Group("/anthropic/v1")
 	{
 		// Chat completions endpoint (Anthropic compatible)
-		anthropicV1.POST("/messages", s.AuthenticateMiddleware(), s.AnthropicMessages)
+		anthropicV1.POST("/messages", s.ModelAuth(), s.AnthropicMessages)
 		// Models endpoint (Anthropic compatible)
-		anthropicV1.GET("/models", s.AuthenticateMiddleware(), s.AnthropicModels)
+		anthropicV1.GET("/models", s.ModelAuth(), s.AnthropicModels)
 	}
 
 	// Legacy API v1 group for backward compatibility
 	v1 := s.router.Group("/v1")
 	{
 		// Chat completions endpoint (OpenAI compatible)
-		v1.POST("/chat/completions", s.AuthenticateMiddleware(), s.ChatCompletions)
+		v1.POST("/chat/completions", s.ModelAuth(), s.ChatCompletions)
 	}
 
-	// Token generation endpoint
-	s.router.POST("/token", s.GenerateToken)
+	// Token generation endpoint (for UI and management)
+	s.router.POST("/token", s.UserAuth(), s.GenerateToken)
 
 	// Integrate Web UI routes if enabled
 	if s.webUI != nil && s.webUI.IsEnabled() {
