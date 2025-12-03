@@ -70,11 +70,7 @@ const Providers = () => {
             token: providerToken,
         };
 
-        const result = await fetch('/api/providers', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(providerData),
-        }).then(res => res.json());
+        const result = await api.addProvider(providerData);
 
         if (result.success) {
             setMessage({ type: 'success', text: 'Provider added successfully!' });
@@ -94,9 +90,7 @@ const Providers = () => {
             return;
         }
 
-        const result = await fetch(`/api/providers/${name}`, {
-            method: 'DELETE',
-        }).then(res => res.json());
+        const result = await api.deleteProvider(name);
 
         if (result.success) {
             setMessage({ type: 'success', text: 'Provider deleted successfully!' });
@@ -107,9 +101,7 @@ const Providers = () => {
     };
 
     const handleToggleProvider = async (name: string) => {
-        const result = await fetch(`/api/providers/${name}/toggle`, {
-            method: 'POST',
-        }).then(res => res.json());
+        const result = await api.toggleProvider(name);
 
         if (result.success) {
             setMessage({ type: 'success', text: result.message });
@@ -120,7 +112,7 @@ const Providers = () => {
     };
 
     const handleEditProvider = async (name: string) => {
-        const result = await fetch(`/api/providers/${name}`).then(res => res.json());
+        const result = await api.getProvider(name);
 
         if (result.success) {
             const provider = result.data;
@@ -151,11 +143,7 @@ const Providers = () => {
             providerData.token = editToken;
         }
 
-        const result = await fetch(`/api/providers/${editingProvider.name}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(providerData),
-        }).then(res => res.json());
+        const result = await api.updateProvider(editingProvider.name, providerData);
 
         if (result.success) {
             setMessage({ type: 'success', text: 'Provider updated successfully!' });
@@ -193,6 +181,16 @@ const Providers = () => {
                         title="Current Providers"
                         subtitle={providers.length > 0 ? `Managing ${providers.length} provider(s)` : "No providers configured yet"}
                         size="full"
+                        rightAction={
+                            <Button
+                                variant="contained"
+                                startIcon={<Add />}
+                                onClick={handleAddProviderClick}
+                                size="small"
+                            >
+                                Add Provider
+                            </Button>
+                        }
                     >
                         {providers.length > 0 ? (
                             <Box sx={{ flex: 1 }}>
@@ -202,7 +200,6 @@ const Providers = () => {
                                             <ProviderCard
                                                 provider={provider}
                                                 variant="detailed"
-                                                onAdd={handleAddProviderClick}
                                                 onEdit={handleEditProvider}
                                                 onToggle={handleToggleProvider}
                                                 onDelete={handleDeleteProvider}

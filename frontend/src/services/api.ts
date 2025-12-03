@@ -86,6 +86,23 @@ export const api = {
   }),
   getHistory: (limit?: number) => fetchUIAPI(`/history${limit ? `?limit=${limit}` : ''}`),
 
+  // Provider management
+  addProvider: (data: any) => fetchUIAPI('/providers', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  getProvider: (name: string) => fetchUIAPI(`/providers/${name}`),
+  updateProvider: (name: string, data: any) => fetchUIAPI(`/providers/${name}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  deleteProvider: (name: string) => fetchUIAPI(`/providers/${name}`, {
+    method: 'DELETE',
+  }),
+  toggleProvider: (name: string) => fetchUIAPI(`/providers/${name}/toggle`, {
+    method: 'POST',
+  }),
+
   // Server control
   startServer: (port: number) => fetchServerAPI('/api/server/start', {
     method: 'POST',
