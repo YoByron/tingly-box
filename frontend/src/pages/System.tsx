@@ -269,15 +269,6 @@ const System = () => {
                         size="large"
                     >
                         <Stack spacing={2}>
-                            <Box sx={{ p: 2, backgroundColor: 'grey.50', borderRadius: 2 }}>
-                                <Typography variant="body2" color="text.secondary" gutterBottom>
-                                    Provider Overview
-                                </Typography>
-                                <Typography variant="body1" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                                    {providersStatus ? `${providersStatus.filter((p: any) => p.enabled).length} / ${providersStatus.length} Enabled` : 'Loading...'}
-                                </Typography>
-                            </Box>
-
                             <Box sx={{ maxHeight: 250, overflowY: 'auto' }}>
                                 {providers.length > 0 ? (
                                     <CardGrid>
