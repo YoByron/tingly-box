@@ -240,7 +240,7 @@ const Layout = ({ children }: LayoutProps) => {
         sx={{
           flexGrow: 1,
           width: { sm: `calc(100% - ${drawerWidth}px)` },
-          height: '100vh',
+          minHeight: '100vh',
           display: 'flex',
           flexDirection: 'column',
         }}
