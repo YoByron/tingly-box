@@ -131,7 +131,6 @@ export const UnifiedCard = ({
           flexDirection: 'column',
           p: 3,
           height: '100%',
-          overflow: 'hidden',
         }}
       >
         {title && (
@@ -164,7 +163,7 @@ export const UnifiedCard = ({
             </Alert>
           </Box>
         )}
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {children}
         </Box>
       </CardContent>
