@@ -15,6 +15,7 @@ import {
     NewReleases,
     ErrorOutline,
     LaptopMac,
+    AutoAwesome,
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -29,6 +30,7 @@ import {
     ListItemText,
     Typography,
     Popover,
+    Divider,
 } from '@mui/material';
 import type { ReactNode } from 'react';
 import React, { useState, useMemo } from 'react';
@@ -51,6 +53,7 @@ interface MenuItem {
     path: string;
     label: string;
     icon?: ReactNode;
+    divider?: boolean;
 }
 
 interface MenuGroup {
@@ -153,6 +156,13 @@ const Layout = ({ children }: LayoutProps) => {
                     icon: <Anthropic size={20} />,
                 },
                 {
+                    divider: true,
+                    path: '/use-agent',
+                    label: 'Claw | Agent',
+                    icon: <AutoAwesome sx={{ fontSize: 20 }} />,
+                },
+                {
+                    divider: true,
                     path: '/use-claude-code',
                     label: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
                     icon: <Claude size={20} />,
@@ -188,24 +198,24 @@ const Layout = ({ children }: LayoutProps) => {
             icon: <PromptIcon sx={{ fontSize: 20 }} />,
             items: promptMenuItems,
         }] : []),
-        ...(enableRemoteCoder ? [{
-            key: 'remote-coder' as const,
-            label: 'Remote Coder',
-            icon: <RemoteIcon sx={{ fontSize: 20 }} />,
-            path: '/remote-coder/chat',
-            items: [
-                {
-                    path: '/remote-coder/chat',
-                    label: 'Chat',
-                    icon: <ChatIcon sx={{ fontSize: 20 }} />,
-                },
-                {
-                    path: '/remote-coder/sessions',
-                    label: 'Sessions',
-                    icon: <RemoteIcon sx={{ fontSize: 20 }} />,
-                },
-            ],
-        }] : []),
+        // ...(enableRemoteCoder ? [{
+        //     key: 'remote-coder' as const,
+        //     label: 'Remote Coder',
+        //     icon: <RemoteIcon sx={{ fontSize: 20 }} />,
+        //     path: '/remote-coder/chat',
+        //     items: [
+        //         {
+        //             path: '/remote-coder/chat',
+        //             label: 'Chat',
+        //             icon: <ChatIcon sx={{ fontSize: 20 }} />,
+        //         },
+        //         {
+        //             path: '/remote-coder/sessions',
+        //             label: 'Sessions',
+        //             icon: <RemoteIcon sx={{ fontSize: 20 }} />,
+        //         },
+        //     ],
+        // }] : []),
         {
             key: 'system',
             label: 'System',
@@ -389,7 +399,9 @@ const Layout = ({ children }: LayoutProps) => {
                                 >
                                     <List sx={{ pl: 0, py: 0 }}>
                                         {group.items.map((item) => (
-                                            <ListItem key={item.path} disablePadding>
+                                            <>
+                                            {item.divider && <Divider sx={{ mx: 4, my: 1 }} />}
+                                            <ListItem disablePadding>
                                                 <ListItemButton
                                                     component={RouterLink}
                                                     to={item.path}
@@ -461,6 +473,7 @@ const Layout = ({ children }: LayoutProps) => {
                                                     />
                                                 </ListItemButton>
                                             </ListItem>
+                                            </>
                                         ))}
                                     </List>
                                 </Collapse>
