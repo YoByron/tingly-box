@@ -9,6 +9,8 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // responsesRequestWithPromptCache builds a Responses request carrying every
@@ -121,4 +123,80 @@ func TestApplyResponsesProviderTransforms_MatchesChatAllowlist(t *testing.T) {
 		_, kept := raw["prompt_cache_options"]
 		assert.Equal(t, supportsExplicitPromptCache(host), kept, url)
 	}
+}
+
+// nativeResponsesRequestWithEveryBreakpoint is a Responses request as a client
+// sends it, with a prompt_cache_breakpoint at each of the 15 positions the
+// request shape allows: prompt template variables, both message item shapes,
+// function_call_output and custom_tool_call_output content — each with
+// input_text, input_image and input_file.
+const nativeResponsesRequestWithEveryBreakpoint = `{
+  "model": "test",
+  "prompt_cache_options": {"mode": "explicit"},
+  "prompt_cache_retention": "24h",
+  "prompt_cache_key": "stable-affinity-key",
+  "prompt": {
+    "id": "pmpt_test",
+    "variables": {
+      "context": {"type": "input_text", "text": "prefix", "prompt_cache_breakpoint": {"mode": "explicit"}},
+      "diagram": {"type": "input_image", "image_url": "https://example.com/a.png", "detail": "auto", "prompt_cache_breakpoint": {"mode": "explicit"}},
+      "spec": {"type": "input_file", "file_id": "file-1", "prompt_cache_breakpoint": {"mode": "explicit"}},
+      "name": "plain string"
+    }
+  },
+  "input": [
+    {"type": "message", "role": "user", "content": [
+      {"type": "input_text", "text": "a", "prompt_cache_breakpoint": {"mode": "explicit"}},
+      {"type": "input_image", "image_url": "https://example.com/b.png", "detail": "auto", "prompt_cache_breakpoint": {"mode": "explicit"}},
+      {"type": "input_file", "file_id": "file-2", "prompt_cache_breakpoint": {"mode": "explicit"}}
+    ]},
+    {"role": "developer", "content": [
+      {"type": "input_text", "text": "b", "prompt_cache_breakpoint": {"mode": "explicit"}},
+      {"type": "input_image", "image_url": "https://example.com/c.png", "detail": "auto", "prompt_cache_breakpoint": {"mode": "explicit"}},
+      {"type": "input_file", "file_id": "file-3", "prompt_cache_breakpoint": {"mode": "explicit"}}
+    ]},
+    {"type": "function_call_output", "call_id": "call_1", "output": [
+      {"type": "input_text", "text": "c", "prompt_cache_breakpoint": {"mode": "explicit"}},
+      {"type": "input_image", "image_url": "https://example.com/d.png", "detail": "auto", "prompt_cache_breakpoint": {"mode": "explicit"}},
+      {"type": "input_file", "file_id": "file-4", "prompt_cache_breakpoint": {"mode": "explicit"}}
+    ]},
+    {"type": "custom_tool_call_output", "call_id": "call_2", "output": [
+      {"type": "input_text", "text": "d", "prompt_cache_breakpoint": {"mode": "explicit"}},
+      {"type": "input_image", "image_url": "https://example.com/e.png", "detail": "auto", "prompt_cache_breakpoint": {"mode": "explicit"}},
+      {"type": "input_file", "file_id": "file-5", "prompt_cache_breakpoint": {"mode": "explicit"}}
+    ]}
+  ]
+}`
+
+// nativeResponsesRequest parses the fixture the way the gateway parses an
+// incoming Responses request.
+func nativeResponsesRequest(t *testing.T) *responses.ResponseNewParams {
+	t.Helper()
+	var req protocol.ResponseCreateRequest
+	require.NoError(t, json.Unmarshal([]byte(nativeResponsesRequestWithEveryBreakpoint), &req))
+	return req.ResponseNewParams
+}
+
+func TestApplyResponsesProviderTransforms_NativeJSON(t *testing.T) {
+	body, _ := marshalResponsesParams(t, nativeResponsesRequest(t))
+	require.Equal(t, 15, strings.Count(body, `"prompt_cache_breakpoint"`),
+		"every breakpoint must survive unmarshalling, or the assertions below prove nothing")
+
+	t.Run("stripped for an unlisted vendor", func(t *testing.T) {
+		req := nativeResponsesRequest(t)
+		ApplyResponsesProviderTransforms(req, "https://example-llm-provider.test/v1")
+		body, raw := marshalResponsesParams(t, req)
+		assert.NotContains(t, body, "prompt_cache_breakpoint")
+		assert.NotContains(t, raw, "prompt_cache_options")
+		assert.NotContains(t, raw, "prompt_cache_retention")
+		assert.Equal(t, "stable-affinity-key", raw["prompt_cache_key"])
+		assert.Contains(t, body, `"name":"plain string"`, "prompt variables themselves are kept")
+	})
+
+	t.Run("kept for the allowlisted vendor", func(t *testing.T) {
+		req := nativeResponsesRequest(t)
+		ApplyResponsesProviderTransforms(req, "https://api.openai.com/v1")
+		body, _ := marshalResponsesParams(t, req)
+		assert.Equal(t, 15, strings.Count(body, `"prompt_cache_breakpoint"`))
+	})
 }

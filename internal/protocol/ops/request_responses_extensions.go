@@ -24,15 +24,29 @@ func ApplyResponsesProviderTransforms(req *responses.ResponseNewParams, provider
 // stripResponsesPromptCacheFields removes the OpenAI-only prompt-cache fields
 // from a Responses request: top-level prompt_cache_options and
 // prompt_cache_retention, and prompt_cache_breakpoint on every input_text /
-// input_image / input_file part — in message content and in function and
-// custom tool call outputs. prompt_cache_key is kept, for the reason given on
-// stripOpenAIPromptCacheFields.
+// input_image / input_file part — in message content, in function and custom
+// tool call outputs, and in prompt template variables. Those are every place
+// the request shape allows a breakpoint. prompt_cache_key is kept, for the
+// reason given on stripOpenAIPromptCacheFields.
 //
 // Every field carries omitzero, so zeroing it omits the key without a JSON
 // round-trip that would drop extra fields.
 func stripResponsesPromptCacheFields(req *responses.ResponseNewParams) {
 	req.PromptCacheOptions = responses.ResponseNewParamsPromptCacheOptions{}
 	req.PromptCacheRetention = ""
+
+	// Map values are copies, but the variants are pointers, so clearing
+	// through them updates the request.
+	for _, variable := range req.Prompt.Variables {
+		switch {
+		case variable.OfInputText != nil:
+			variable.OfInputText.PromptCacheBreakpoint = responses.ResponseInputTextPromptCacheBreakpointParam{}
+		case variable.OfInputImage != nil:
+			variable.OfInputImage.PromptCacheBreakpoint = responses.ResponseInputImagePromptCacheBreakpointParam{}
+		case variable.OfInputFile != nil:
+			variable.OfInputFile.PromptCacheBreakpoint = responses.ResponseInputFilePromptCacheBreakpointParam{}
+		}
+	}
 
 	for i := range req.Input.OfInputItemList {
 		item := &req.Input.OfInputItemList[i]
