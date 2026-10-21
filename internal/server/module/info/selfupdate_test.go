@@ -115,7 +115,7 @@ func TestUpdaterUpdate(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "changed 2 packages", out)
 		assert.Equal(t, SelfUpdateResult{Version: "0.261001.1", Restarting: true}, result)
-		assert.Contains(t, *cmds, []string{npmExecutable(), "install", "-g", "tingly-box@0.261001.1"})
+		assert.Contains(t, *cmds, []string{npmExecutable(), "install", "-g", "--ignore-scripts", "--no-audit", "--no-fund", "tingly-box@0.261001.1"})
 		require.NotEmpty(t, *spawned)
 		assert.Equal(t, npmLauncher("/opt/npm"), (*spawned)[0])
 		assert.Equal(t, []string{"--source=npm", "restart", "--host", "0.0.0.0", "--port", "12580"}, (*spawned)[1:])
@@ -166,6 +166,21 @@ func TestUpdaterUpdate(t *testing.T) {
 		var refused *refusedError
 		require.ErrorAs(t, err, &refused)
 	})
+
+	// The version comes from the registry: anything that is not a plain
+	// release version is refused before npm runs at all.
+	for _, version := range []string{"", "latest", "--global-style", "1.2.3 --prefix=/tmp", "1.2.3/../evil", "file:../x", "1.2"} {
+		t.Run("unexpected version "+version+" is refused", func(t *testing.T) {
+			u, cmds, _ := fakeUpdater(t)
+			_, _, err := u.update(ctx, version)
+			var refused *refusedError
+			require.ErrorAs(t, err, &refused)
+			assert.Empty(t, *cmds, "npm must not run")
+		})
+	}
+	for _, version := range []string{"1.261015.0", "1.261015.0-rc1", "0.261001.0-rc.1"} {
+		assert.True(t, releaseVersion.MatchString(version), version)
+	}
 }
 
 func TestDirWritable(t *testing.T) {

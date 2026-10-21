@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -25,6 +26,11 @@ import (
 // freshly installed launcher's `restart` detached. Under a service manager
 // (systemd, pm2) it does not: the manager owns the process, so the UI tells
 // the user to restart the service instead.
+
+// releaseVersion matches the npm versions tingly-box publishes (1.261015.0,
+// 1.261015.0-rc1). The version comes from the registry, so it is checked
+// before it reaches npm's command line.
+var releaseVersion = regexp.MustCompile(`^\d+\.\d+\.\d+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$`)
 
 const (
 	selfUpdateInstallTimeout = 5 * time.Minute
@@ -163,6 +169,10 @@ func (u *updater) update(ctx context.Context, version string) (SelfUpdateResult,
 		u.mu.Unlock()
 	}()
 
+	if !releaseVersion.MatchString(version) {
+		return SelfUpdateResult{}, "", &refusedError{fmt.Sprintf("refusing to install unexpected version %q", version)}
+	}
+
 	ctx = context.WithoutCancel(ctx)
 	sup, prefix := u.support(ctx)
 	if !sup.Supported {
@@ -171,7 +181,10 @@ func (u *updater) update(ctx context.Context, version string) (SelfUpdateResult,
 
 	installCtx, cancel := context.WithTimeout(ctx, selfUpdateInstallTimeout)
 	defer cancel()
-	out, err := u.runCmd(installCtx, npmExecutable(), "install", "-g", tinglyBoxNPM+"@"+version)
+	// tingly-box and its platform packages ship no lifecycle scripts, so
+	// --ignore-scripts costs nothing and rules out running any during an
+	// update; stdin is empty, so npm cannot block on a prompt.
+	out, err := u.runCmd(installCtx, npmExecutable(), "install", "-g", "--ignore-scripts", "--no-audit", "--no-fund", tinglyBoxNPM+"@"+version)
 	if err != nil {
 		return SelfUpdateResult{}, string(out), fmt.Errorf("npm install failed: %w", err)
 	}
